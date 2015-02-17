@@ -11,9 +11,11 @@ package main
 
 import (
 Log "./seelog-master"
+"encoding/json"
 "flag"
 "fmt"
 "html/template"
+"io/ioutil"
 "math/rand"
 "net/http"
 "sync"
@@ -30,6 +32,11 @@ var portNO *int
 var printToFile int
 var mutex = &sync.Mutex{}
 var portInfoStuff PortInfo
+var timeout *int
+var authport *int
+var authhost *string
+var backupTime *int
+var cookieMap = make(map[string]http.Cookie)
 
 type PortInfo struct {
 	PortNum string
@@ -282,6 +289,70 @@ func badHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 /*
+Updates dumpfile.txt 
+*/
+func Updatedumpfile() {
+    stallDuration := time.Duration(*backupTime)*time.Second
+    for {
+	time.Sleep(stallDuration)
+        mutex.Lock()
+        encodedMap,_ := json.Marshal(cookieMap)
+        mutex.Unlock()
+
+        oldDump,err := ioutil.ReadFile("dumpfile.txt")
+        if err != nil { //Assume that dumpfile.txt hasn't been made yet
+            ioutil.WriteFile("dumpfile.txt", encodedMap, 0644)
+	    readCopy,err2 := ioutil.ReadFile("dumpfile.txt")
+	    if err2 != nil {
+	       fmt.Println("Error reading dumpfile")
+                if printToFile == 1 {
+		    defer Log.Flush()
+		    Log.Error("Error reading dumpfile")
+		    return
+	        }
+            }
+	    mutex.Lock()
+	    err3 := json.Unmarshal(readCopy, &cookieMap)
+	    mutex.Unlock()
+	    if err3 != nil {
+	        fmt.Println("Error unmarshaling")
+	        if printToFile == 1 {
+	    	    defer Log.Flush()
+		    Log.Error("Error unmarshaling")
+	        }
+            }
+	    return
+        }
+
+        ioutil.WriteFile("dumpfile.bak", oldDump, 0644)
+        os.Remove("dumpfile.txt")
+        ioutil.WriteFile("dumpfile.txt", encodedMap, 0644)
+        readCopy,err5 := ioutil.ReadFile("dumpfile.txt")
+        if err5 != nil {
+	    fmt.Println("Error reading dumpfile")
+            if printToFile == 1 {
+	        defer Log.Flush()
+	        Log.Error("Error reading dumpfile")
+	        return
+	    }
+        }
+
+        mutex.Lock()
+        err6 := json.Unmarshal(readCopy, &cookieMap)
+        mutex.Unlock()
+        if err6 != nil {
+	    fmt.Println("Error unmarshaling")
+	    if printToFile == 1 {
+                defer Log.Flush()
+	        Log.Error("Error unmarshaling")
+	    }
+	    return
+        }
+        os.Remove("dumpfile.bak")
+    }
+}
+
+/*
 Main
 */
 func main() {
@@ -300,6 +371,15 @@ func main() {
 
     logPath := flag.String("log", "seelog.xml", "")
 
+    timeout = flag.Int("authtimeout-ms", 2000, "")
+
+    authport = flag.Int("authport", 8181, "")
+
+    authhost = flag.String("authhost", "localhost:", "")
+     
+    loadDumpFile := flag.Bool("dumpfile", false, "")
+
+    backupTime = flag.Int("checkpoint-interval", 0, "")
 
     //Setup the seelog logger (cudos to http://sillycat.iteye.com/blog/2070140, https://github.com/cihub/seelog/blob/master/doc.go#L57)
     logger,loggerErr := Log.LoggerFromConfigAsFile("../etc/" + *logPath)
@@ -324,6 +404,32 @@ func main() {
 	
     portInfoStuff = PortInfo{
 	PortNum: strconv.Itoa(*portNO),
+    }
+
+    if *loadDumpFile == true {
+	dump,err := ioutil.ReadFile("dumpfile.txt")
+	if err != nil {
+	    fmt.Println("Error reading dumpfile")
+            if printToFile == 1 {
+		defer Log.Flush()
+		Log.Error("Error reading dumpfile")
+	    }
+        } else {
+	    mutex.Lock()
+	    err2 := json.Unmarshal(dump, &cookieMap)
+	    mutex.Unlock()
+	    if err2 != nil {
+	        fmt.Println("Error unmarshaling")
+	        if printToFile == 1 {
+		    defer Log.Flush()
+		    Log.Error("Error unmarshaling")
+	        }
+            }
+        }
+    }
+
+    if *backupTime > 0 {
+	go Updatedumpfile()
     }
 
     // URL handling

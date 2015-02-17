@@ -17,7 +17,6 @@ Log "./seelog-master"
 "strconv"
 "time"
 )
-var cookieMap = make(map[string]http.Cookie)
 
 //Adds a cookie to the cookie map
 func mapSetCookie (newCookie http.Cookie, newUUID string) {
