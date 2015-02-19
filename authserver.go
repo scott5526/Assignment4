@@ -29,13 +29,13 @@ func getRedirectHandler (w http.ResponseWriter, r *http.Request) string {
     cookieName := ""
     cookieUUID := r.FormValue("cookie")
     if cookieUUID == "" { 
-	w.writeHeader(400) // set response code to 400, malformed request
+	w.WriteHeader(400) // set response code to 400, malformed request
 	return cookieName
     }
      
     //Attempt to retrieve user name from cookie map based on UUID
 
-    w.writeHeader(200) // set response code to 200, request processed
+    w.WriteHeader(200) // set response code to 200, request processed
     return cookieName    
 }
 
@@ -49,18 +49,18 @@ func setRedirectHandler (w http.ResponseWriter, r *http.Request) {
     cookie := r.FormValue("cookie")
     cookieName := r.FormValue("name")
     if cookie == nil {
-	w.writeHeader(400) // set response code to 400, malformed request
+	w.WriteHeader(400) // set response code to 400, malformed request
 	return
     }
     if cookieName == "" {
-	w.writeHeader(400) // set response code to 400, malformed request
+	w.WriteHeader(400) // set response code to 400, malformed request
 	return
     }
 
     // attempt to add cookie to internal cookie map
 
 
-    w.writeHeader(200) // set response code to 200, request processed
+    w.WriteHeader(200) // set response code to 200, request processed
 }
 
 
@@ -68,8 +68,7 @@ func setRedirectHandler (w http.ResponseWriter, r *http.Request) {
 
 */
 func errorHandler (w http.ResponseWriter, r *http.Request) {
-    w.writeHeader(404) // Set response code to 404 not found
-    return
+    w.WriteHeader(404) // Set response code to 404 not found
 }
 
 /*

@@ -79,6 +79,8 @@ http://localhost:(xxx)/logout
 
 Caveats
 ---------------------------------------------------------------------------------------------
+Chrome & Firefox support is included.  No Internet Explorer support is included because IE button handling is 0_o
+
 When trying to run the server, if the specified port is already in use the program will terminate with a error message on a non-zero error code.
 
 Any URL beyond http://localhost:(port #) that doesn't match the above specified URL will result in a 404 not found web page.

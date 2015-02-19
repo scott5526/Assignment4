@@ -25,7 +25,7 @@ Log "./seelog-master"
 "time"
 )
 
-var currUser string
+//var currUser string
 var templatesPath *string
 var redirect bool
 var portNO *int
@@ -37,6 +37,9 @@ var authport *int
 var authhost *string
 var backupTime *int
 var cookieMap = make(map[string]http.Cookie)
+var maxRequests *int
+var currentRequests int
+var isRequestMax bool
 
 type PortInfo struct {
 	PortNum string
@@ -56,6 +59,17 @@ Redirects to greetingHandler with a saved URL "/"
 */
 
 func greetingRedirect1(w http.ResponseWriter, r *http.Request) {
+    if isRequestMax {
+	mutex.Lock()
+	currentRequests += 1
+	mutex.Unlock()
+
+	if currentRequests > *maxRequests {	
+    	    w.WriteHeader(500)
+            w.Write([]byte("Internal Service Error"))
+        }
+    }
+
     if r.URL.Path != "/" {
 	badHandler(w,r) // check if the URL is valid
 	return
@@ -67,6 +81,12 @@ func greetingRedirect1(w http.ResponseWriter, r *http.Request) {
 	defer Log.Flush()
     	Log.Info("localhost:" + strconv.Itoa(*portNO) + "/\r\n")
     }
+
+    if isRequestMax {
+	mutex.Lock()
+	currentRequests -= 1
+	mutex.Unlock()
+    }
     greetingHandler(w,r)
 }
 
@@ -77,11 +97,28 @@ Redirects to greetingHandler with a saved URL "/index.html"
 */
 
 func greetingRedirect2(w http.ResponseWriter, r *http.Request) {
+   if isRequestMax {
+	mutex.Lock()
+	currentRequests += 1
+	mutex.Unlock()
+
+	if currentRequests > *maxRequests {	
+    	    w.WriteHeader(500)
+            w.Write([]byte("Internal Service Error"))
+        }
+    }
+
     fmt.Println("localhost:" + strconv.Itoa(*portNO) + "/index.html")
 
     if  printToFile == 1 { //Check if the p2f flag is set
 	defer Log.Flush()
     	Log.Info("localhost:" + strconv.Itoa(*portNO) + "/index.html\r\n")
+    }
+
+    if isRequestMax {
+	mutex.Lock()
+	currentRequests -= 1
+	mutex.Unlock()
     }
     greetingHandler(w,r)
 }
@@ -92,6 +129,17 @@ Greeting message
 Presents the user with a login message if a cookie is found for them, otherwise redirects to the login page
 */
 func greetingHandler(w http.ResponseWriter, r *http.Request) {
+   if isRequestMax {
+	mutex.Lock()
+	currentRequests += 1
+	mutex.Unlock()
+
+	if currentRequests > *maxRequests {	
+    	    w.WriteHeader(500)
+            w.Write([]byte("Internal Service Error"))
+        }
+    }
+
     greetingCheck(w, r)
 
     if redirect == true { //If no matching cookie was found in the cookie map, redirect
@@ -105,6 +153,12 @@ func greetingHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		return
     	}   
+
+   	if isRequestMax {
+	    mutex.Lock()
+	    currentRequests -= 1
+	    mutex.Unlock()
+        }
     	newTemplate.ExecuteTemplate(w,"loginRedirectTemplate",portInfoStuff)
     }
 }
@@ -116,6 +170,17 @@ Creates a cookie for the user name and redirects them to the home page if a vali
 If no valid user name was provided, outputs an error message
 */
 func loginHandler(w http.ResponseWriter, r *http.Request) {
+   if isRequestMax {	
+	mutex.Lock()
+	currentRequests += 1
+	mutex.Unlock()
+
+	if currentRequests > *maxRequests {	
+    	    w.WriteHeader(500)
+            w.Write([]byte("Internal Service Error"))
+        }
+    }
+
     fmt.Println("localhost:" + strconv.Itoa(*portNO) + "/login")
 
     if  printToFile == 1 { //Check if the p2f flag is set
@@ -138,8 +203,13 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 
     expDate := time.Now()
     expDate.AddDate(1,0,0)
-
     cookieSetup(w, r, newUUID, expDate)
+
+    if isRequestMax {
+	 mutex.Lock()
+	 currentRequests -= 1
+	 mutex.Unlock()
+    }
 }
 
 /*
@@ -148,6 +218,17 @@ Logout handler.
 Clears user cookie, displays goodbye message for 10 seconds, then redirects user to login form
 */
 func logoutHandler(w http.ResponseWriter, r *http.Request) {
+   if isRequestMax {
+	mutex.Lock()
+	currentRequests += 1
+	mutex.Unlock()
+
+	if currentRequests > *maxRequests {	
+    	    w.WriteHeader(500)
+            w.Write([]byte("Internal Service Error"))
+        }
+    }
+
    fmt.Println("localhost:" + strconv.Itoa(*portNO) + "/logout")
 
     if  printToFile == 1 { //Check if the p2f flag is set
@@ -169,6 +250,11 @@ func logoutHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		return
     	}   
+        if isRequestMax {
+	    mutex.Lock()
+	    currentRequests -= 1
+	    mutex.Unlock()
+        }
     	newTemplate.ExecuteTemplate(w,"loginRedirectTemplate",portInfoStuff)
     }
 
@@ -183,6 +269,12 @@ func logoutHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	return;
     }  
+
+    if isRequestMax {
+	mutex.Lock()
+	currentRequests -= 1
+	mutex.Unlock()
+    }
     newTemplate.ExecuteTemplate(w,"loginRedirectTemplate",portInfoStuff)
 }
 
@@ -194,6 +286,17 @@ Outputs the current time in the format:
 Hour:Minute:Second PM/AM
 */
 func timeHandler(w http.ResponseWriter, r *http.Request) {
+    if isRequestMax {
+	mutex.Lock()
+	currentRequests += 1
+	mutex.Unlock()
+
+	if currentRequests > *maxRequests {	
+    	    w.WriteHeader(500)
+            w.Write([]byte("Internal Service Error"))
+        }
+    }
+
     fmt.Println("localhost:" + strconv.Itoa(*portNO) + "/time")
 
     if  printToFile == 1 { //Check if the p2f flag is set
@@ -238,6 +341,11 @@ func timeHandler(w http.ResponseWriter, r *http.Request) {
 	return;
     } 
     newTemplate.ExecuteTemplate(w,"timeTemplate",currTimeInfo)
+    if isRequestMax {
+	mutex.Lock()
+	currentRequests -= 1
+	mutex.Unlock()
+    }
 }
 
 /*
@@ -246,6 +354,17 @@ Menu handler.
 Displays menu consisting of Home, Time, Logout, and About us
 */
 func menuHandler(w http.ResponseWriter, r *http.Request) {
+   if isRequestMax {
+	mutex.Lock()
+	currentRequests += 1
+	mutex.Unlock()
+
+	if currentRequests > *maxRequests {	
+    	    w.WriteHeader(500)
+            w.Write([]byte("Internal Service Error"))
+        }
+    }
+
    fmt.Println("localhost:" + strconv.Itoa(*portNO) + "/menu")
 
    if  printToFile == 1 { //Check if p2f flag is set
@@ -253,11 +372,11 @@ func menuHandler(w http.ResponseWriter, r *http.Request) {
     	Log.Info("localhost:" + strconv.Itoa(*portNO) + "/menu\r\n")
    }
 
-    //Redirect to the menu page
+    //Open the menu page
     path := *templatesPath + "menu.html"
-    newTemplate,err := template.New("redirect").ParseFiles(path)  
+    newTemplate,err := template.New("open").ParseFiles(path)  
     if err != nil {
-	fmt.Println("Error running menu redirect template")
+	fmt.Println("Error running menu HTML template")
         if printToFile == 1 {
 		defer Log.Flush()
     		Log.Error("Error running menu redirect template\r\n")
@@ -265,12 +384,29 @@ func menuHandler(w http.ResponseWriter, r *http.Request) {
 	return;
     }  
     newTemplate.ExecuteTemplate(w,"menuTemplate",portInfoStuff)
+
+    if isRequestMax {
+	mutex.Lock()
+	currentRequests -= 1
+	mutex.Unlock()
+    }
 }
 
 /*
 Handler for invalid requests.  Outputs a 404 error message and a cheeky message
 */
 func badHandler(w http.ResponseWriter, r *http.Request) {
+   if isRequestMax {
+	mutex.Lock()
+	currentRequests += 1
+	mutex.Unlock()
+
+	if currentRequests > *maxRequests {	
+    	    w.WriteHeader(500)
+            w.Write([]byte("Internal Service Error"))
+        }
+    }
+
     if r.URL.Path == "/index.html" {
 	return
     } else if r.URL.Path == "/login" {
@@ -285,7 +421,12 @@ func badHandler(w http.ResponseWriter, r *http.Request) {
 
     http.NotFound(w, r)
     w.Write([]byte("These are not the URLs you're looking for."))
-    return
+
+    if isRequestMax {
+	mutex.Lock()
+	currentRequests -= 1
+	mutex.Unlock()
+    }
 }
 
 /*
@@ -359,10 +500,10 @@ func main() {
     fmt.Println("Starting new server")
 
     //Version output & port selection
-    version := flag.Bool("V", false, "Version 4.0") //Create a bool flag for version  
+    version := flag.Bool("V", false, "Version 4.2") //Create a bool flag for version  
     						    //and default to no false
 
-    portNO = flag.Int("port", 8080, "")	    //Create a int flag for port selection
+    portNO = flag.Int("port", 8080, "")	    	    //Create a int flag for port selection
 					            //and default to port 8080
 
     p2f := flag.Bool("p2f", false, "") //flag to output to file
@@ -381,6 +522,8 @@ func main() {
 
     backupTime = flag.Int("checkpoint-interval", 0, "")
 
+    maxRequests = flag.Int("max-inflight", 0, "")
+
     //Setup the seelog logger (cudos to http://sillycat.iteye.com/blog/2070140, https://github.com/cihub/seelog/blob/master/doc.go#L57)
     logger,loggerErr := Log.LoggerFromConfigAsFile("../etc/" + *logPath)
     if loggerErr != nil {
@@ -394,7 +537,7 @@ func main() {
     flag.Parse()
 
     if *version == true {		//If version outputting selected, output version and 
-        fmt.Println("Version 4.0")	//terminate program with 0 error code
+        fmt.Println("Version 4.2")	//terminate program with 0 error code
         os.Exit(0)
     }
 
@@ -431,6 +574,15 @@ func main() {
     if *backupTime > 0 {
 	go Updatedumpfile()
     }
+
+    //Indicate whether or not there is a maximum # of concurrent requests
+    if *maxRequests > 0 {
+	isRequestMax = true
+    } else {
+	isRequestMax = false
+    }
+
+    currentRequests = 0
 
     // URL handling
     http.HandleFunc("/", greetingRedirect1)

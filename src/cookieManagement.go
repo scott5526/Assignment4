@@ -27,7 +27,9 @@ func mapSetCookie (newCookie http.Cookie, newUUID string) {
 
 //Attempt to find a cookie on the user's browser and greet them using their name stored on it
 func greetingCheck (w http.ResponseWriter, r *http.Request) {
+    mutex.Lock()
     redirect = true
+    mutex.Unlock()
     for _, currCookie := range r.Cookies() { // check all potential cookies stored by the user for a matching cookie
     	if (currCookie.Name != "") {
 	    currCookieVal := currCookie.Value
@@ -36,7 +38,9 @@ func greetingCheck (w http.ResponseWriter, r *http.Request) {
 	    mutex.Unlock()
             if (mapCookie.Value != "") {
     		fmt.Fprintf(w, "Greetings, " + mapCookie.Value)
+		mutex.Lock()
 		redirect = false
+		mutex.Unlock()
 	    }
 	}
     }
@@ -58,6 +62,12 @@ func loginCheck (w http.ResponseWriter, r *http.Request) {
 				fmt.Println("Error running greeting redirect template")
 				return
     			}  
+   			if isRequestMax {
+			    mutex.Lock()
+			    currentRequests -= 1
+			    mutex.Unlock()
+    			}
+
     			newTemplate.ExecuteTemplate(w,"greetingRedirectTemplate",portInfoStuff)
 		}
     	}
@@ -67,7 +77,10 @@ func loginCheck (w http.ResponseWriter, r *http.Request) {
 //Clears a user's cookie from the cookie map and clear (1) copy of the cookie from the user's browser (cannot delete
 //copies the user may have created themselves and stored elsewhere)
 func clearMapCookie (r *http.Request) {
+   mutex.Lock()
    redirect = false // set to true if user cookie is found (they are actually logged in)
+   mutex.Unlock()
+
    for _, currCookie := range r.Cookies() {  //Run through the range of applicable cookies on the user's browser
     	if (currCookie.Name != "") {
 	currCookieVal := currCookie.Value
@@ -75,7 +88,10 @@ func clearMapCookie (r *http.Request) {
 	mapCookie := cookieMap[currCookieVal]  //Find the corresponding cookie in the local cookie map
 	mutex.Unlock()
         	if (mapCookie.Value != "") {
+			mutex.Lock()
 			redirect = true // user was actually logged in
+			mutex.Unlock()
+
 			mutex.Lock()
     			delete(cookieMap, currCookieVal) //Delete the cleared cookie from the local cookie map
 			mutex.Unlock()
@@ -105,9 +121,9 @@ func cookieSetup (w http.ResponseWriter, r *http.Request, newUUID string, expDat
 
     r.ParseForm()
     name := r.PostFormValue("name")
-    submit := r.PostFormValue("submit") 
+    submit := r.PostFormValue("submit")
 
-    if submit == "Submit" { // check if the user hit the "submit" button
+    if submit == "Submit"{ // check if the user hit the "submit" button
     	if name == "" {
 		path = *templatesPath + "/badLogin.html"
     		newTemplate,_ := template.New("outputUpdate").ParseFiles(path)   
@@ -143,8 +159,16 @@ func cookieSetup (w http.ResponseWriter, r *http.Request, newUUID string, expDat
 			}
 			return;
     		} 
+   		if isRequestMax {
+		    mutex.Lock()
+		    currentRequests -= 1
+		    mutex.Unlock()
+    		}
+
     		newTemp.ExecuteTemplate(w,"greetingRedirectTemplate",portInfoStuff)
     	}
+    } else {
+	//Form not submitted or incompatible browser (I'm looking at you Internet Explorer)
     }
 }
 
