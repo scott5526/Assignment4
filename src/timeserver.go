@@ -40,6 +40,9 @@ var cookieMap = make(map[string]http.Cookie)
 var maxRequests *int
 var currentRequests int
 var isRequestMax bool
+var avgResponse *int
+var standardDeviation *int
+var runDelay bool
 
 type PortInfo struct {
 	PortNum string
@@ -340,12 +343,62 @@ func timeHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	return;
     } 
+
+    if runDelay {
+	time.Sleep(time.Duration(generateDelay())*(time.Second/1000))
+    }
+    
     newTemplate.ExecuteTemplate(w,"timeTemplate",currTimeInfo)
     if isRequestMax {
 	mutex.Lock()
 	currentRequests -= 1
 	mutex.Unlock()
     }
+}
+
+/*
+Generates a random relay based on the standard deviation & average response time flags
+*/
+func generateDelay() int {
+    deviation := (rand.Int() % 1000) + 1
+    change := ((rand.Int() % 100) + 1) / 100
+    change = change * *standardDeviation
+    addorMinus := rand.Int() % 2
+    delay := 0
+
+    if deviation < 682 { //within 1st standard deviation of avg
+	if addorMinus == 0 { // add
+	    delay = *avgResponse + change
+        } else { // minus
+	    delay = *avgResponse - change
+
+	    if delay < 0 {
+		delay = 0
+	    }
+        }
+    } else if deviation < 958 { //within 2nd standard deviation of avg
+	if addorMinus == 0 { // add
+	    delay = *avgResponse + *standardDeviation + change
+        } else { // minus
+	    delay = *avgResponse - *standardDeviation - change
+
+	    if delay < 0 {
+		delay = 0
+	    }
+        }
+    } else { //within 3rd standard deviation of avg
+	if addorMinus == 0 { // add
+	    delay = *avgResponse + (*standardDeviation * 2) + change
+        } else { // minus
+	    delay = *avgResponse - (*standardDeviation * 2) - change
+
+	    if delay < 0 {
+		delay = 0
+	    }
+        }
+    }
+
+    return delay
 }
 
 /*
@@ -514,7 +567,7 @@ func main() {
 
     timeout = flag.Int("authtimeout-ms", 2000, "")
 
-    authport = flag.Int("authport", 8181, "")
+    authport = flag.Int("authport", 9090, "")
 
     authhost = flag.String("authhost", "localhost:", "")
      
@@ -523,6 +576,10 @@ func main() {
     backupTime = flag.Int("checkpoint-interval", 0, "")
 
     maxRequests = flag.Int("max-inflight", 0, "")
+
+    avgResponse = flag.Int("avg-response-ms", -1, "")
+
+    standardDeviation = flag.Int("deviation-ms", -1, "")
 
     //Setup the seelog logger (cudos to http://sillycat.iteye.com/blog/2070140, https://github.com/cihub/seelog/blob/master/doc.go#L57)
     logger,loggerErr := Log.LoggerFromConfigAsFile("../etc/" + *logPath)
@@ -583,6 +640,24 @@ func main() {
     }
 
     currentRequests = 0
+
+    //Need avgResponse AND standardDeviation or don't use either
+    runDelay = true
+    if *avgResponse < 0 || *standardDeviation < 0 {
+	runDelay = false
+    } else if *avgResponse < 0 {
+	fmt.Println("avg-response-ms flag used, but not deviation-ms.  avg-response-ms being ignored")
+	if printToFile == 1 {
+	    defer Log.Flush()
+	    Log.Warn("avg-response-ms flag used, but not deviation-ms.  avg-response-ms being ignored")
+	}
+    } else if *standardDeviation < 0 {
+	fmt.Println("deviation-ms flag used, but not avg-response-ms.  deviation-ms being ignored")
+	if printToFile == 1 {
+	    defer Log.Flush()
+	    Log.Warn("deviation-ms flag used, but not avg-response-ms.  deviation-ms being ignored")
+	}	
+    }
 
     // URL handling
     http.HandleFunc("/", greetingRedirect1)
