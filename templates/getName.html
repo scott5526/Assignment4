@@ -1,8 +1,0 @@
-{{define "getNameTemplate"}}
-<head><title></title>
-<script type="text/javascript">
-    var redirectURL = {{.AuthHost}} + {{.AuthPort}} + "/get?cookie==" + {{.cookieUUID}}
-    window.location = redirectURL
-</script>
-</head>
-{{end}}

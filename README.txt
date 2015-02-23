@@ -29,6 +29,8 @@ http://www.golang-book.com/7/index.htm
 http://pivotallabs.com/next-steps-in-go-code-organization/
 http://stackoverflow.com/questions/9985559/organizing-a-multiple-file-go-project
 https://github.com/cihub/seelog/blob/master/doc.go#L57
+http://stackoverflow.com/questions/26611918/golang-postform-request-for-updating-one-of-the-resources-of-cloudfoundry-app
+https://developer.mozilla.org/en-US/docs/Web/Guide/HTML/Forms_in_HTML
 chrome://settings/cookies
 ---------------------------------------------------------------------------------------------
 
@@ -39,13 +41,20 @@ Running the timeserver.go file
 To run timeserver.go, open the Windows command prompt and move to the directory of timeserver.go.  To run the file, use "go build && src" with any applicable flags.
 Alternatively, to run the vanilla timeserver without any flags, just run the "src" executable in the src folder
 
-Applicable flags include:
+The same rules apply for authserver, but the executable in the authserver folder will be called "authserver" instead, but it will also run the vanilla authserver without
+flags.
+
+ATTENTION:
+TO RUN TIMESERVER, YOU MUST FIRST START AUTHSERVER.  TIMESERVER CAN START WITHOUT AUTHSERVER, BUT RUNNING ANY URLS WILL CAUSE NO LESS THAT 1 MILLION ERROR LINES IN YOUR
+CONSOLE.  YOU MUST ALWAYS HAVE AUTHSERVER RUNNING TO USE TIMESERVER!!!!!!!!!
+
+Applicable timeserver flags include:
 
 -V ("go build && src -V")
 
 Runs timeserver.go with the version flag enabled.  Will output the current version of the file and terminate the program with a zero error code.
 
--port # ("go build && src -port 9999")
+-port ("go build && src -port 9999")
 
 Runs timeserver.go with a specified port (the default port # is 8080).
 
@@ -56,7 +65,52 @@ Writes accessed URLS to output.txt in addition to the console
 -templates ("go build && src -templates ../Templates")
 Specifies the directory of the templates being used
 
-NOTE: All files, by name, found in the ./src/Templates folder MUST be present in the specified
+-log (go build && src -log ../folder1234/differentseelog.xml)
+Specifies the folder and file name used for seelog configuration
+
+-authtimeout-ms (go build && src -authtimeout-ms 2000)
+Specifies the time in milliseconds that the timeserver will wait on authserver to respond to a request before timing out (default 2000ms)
+
+-authport (go build && src -authport 9191)
+Specifies the port being used by authserver
+
+-authhost (go build && src -authhost boogeyman:)
+Specifies the domain being used by authserver
+
+-max-inflight (go build && src -max-inflight 50)
+Specifies the number of concurrent requests the timeserver can handle
+
+NOTE: Some requests may act as multiple requests as they are making timeserver do several things simultaneously. Use arbitrarily
+
+-avg-response-ms (go build && src -avg-response-ms 5000)
+Specifies the average response time of reporting the current time for use in generating a delay to retrieving time (MUST BE USED WITH "deviation-ms" TO DO THIS)
+
+-deviation-ms (go build && src -deviation-ms 1000)
+Specifies the standard deviation of the average response time for retrieving current time.  (MUST BE USED WITH "avg-response-ms" TO DO THIS)
+
+Applicable authserver flags include:
+
+-p2f ("go build && authserver -p2f")
+
+Writes accessed URLS to output.txt in addition to the console
+
+-log (go build && authserver -log ../folder1234/differentseelog.xml)
+Specifies the folder and file name used for seelog configuration
+
+-authport (go build && authserver -authport 9191)
+Specifies the port being used by authserver
+
+-authhost (go build && authserver -authhost boogeyman:)
+Specifies the domain being used by authserver
+
+-dumpfile (go build && authserver -dumpfile)
+Specifies if the authserver should attempt to load cookies from a previous authserver runtime found in "dumpfile.txt" (must be located in same folder as authserver)
+
+-checkpoint-interval (go build && authserver -checkpoint-interval 15)
+Specifies how often authserver should backup dumpfile in seconds 
+
+
+NOTE: All files, by name, found in the ./Templates folder MUST be present in the specified
       directory or the timeserver WILL NOT RUN PROPERLY.  Use this flag to run different variants
       of the files in the ./src/Templates folder.
 ---------------------------------------------------------------------------------------------
@@ -65,14 +119,15 @@ NOTE: All files, by name, found in the ./src/Templates folder MUST be present in
 
 Accessing the server from a web browser
 ---------------------------------------------------------------------------------------------
-Enter the desired URL.  Some URLS are only accessible when logged in and will redirect otherwise
+Enter the desired URL.  Some URLS are only accessible when logged in and will redirect otherwise.  Authserver URLS not included (private, not public URLS)
 
-The supported URLS are (where "(xxx)" is the port #:
+The supported static URLS are (where "(xxx)" is the port #):
 http://localhost:(xxx)/
 http://localhost:(xxx)/index.html
 http://localhost:(xxx)/time
 http://localhost:(xxx)/login
 http://localhost:(xxx)/logout
+http://localhost:(xxx)/menu
 ---------------------------------------------------------------------------------------------
 
 

@@ -18,6 +18,7 @@ Log "../seelog-master"
 "net/http"
 "os"
 "strconv"
+//"strings"
 "sync"
 "time"
 )
@@ -35,35 +36,36 @@ Returns user name or empty with response code 200 on valid request.
 Returns empty string with response code 400 on malformed request
 */
 func getRedirectHandler (w http.ResponseWriter, r *http.Request) {
+    responseCode := 200
+
     r.ParseForm()
     cookieName := ""
-    cookieUUID := r.URL.Path.Get("cookie")
+    cookieUUID := r.FormValue("cookie")
     if cookieUUID == "" { 
-	w.WriteHeader(400) // set response code to 400, malformed request
+	responseCode = 400 // set response code to 400, malformed request
+    } else {
+	responseCode = 200 // set response code to 200, request processed
     }
      
     //Attempt to retrieve user name from cookie map based on UUID
     foundCookie := false
 
     mutex.Lock()
-    for _, currCookie := range cookieMap {  //Run through the range of applicable cookies on the user's browser
-    	if (currCookie.Name != "") {
-	    currCookieVal := currCookie.Name
+    cookieLookup := cookieMap[cookieUUID]
+    mutex.Unlock()
 
-            if (currCookieVal == cookieUUID) {
-		foundCookie = true
-		cookieName = currCookie.Value
-	    }
-    	}
-     }
-     mutex.Unlock()
+    if cookieLookup.Name != "" {
+	foundCookie = true
+	cookieName = cookieLookup.Value
+    }
 
-     if !foundCookie {
-	 w.WriteHeader(400) // set response code to 400, malformed request
-     }
-
-     w.WriteHeader(200) // set response code to 200, request processed
-     // redirect to timeserver URL localhost:8080/get?name=cookieName 
+    if !foundCookie {
+	responseCode = 400 // set response code to 400, malformed request
+    }
+     
+    w.WriteHeader(responseCode)
+    w.Write([]byte(cookieName))
+    // timeserver will need to use r.ParseForm() and http.get(URL (i.e. authhost:9090/get) to retrieve data
 }
 
 /*
@@ -74,24 +76,58 @@ Returns response code 400 on malformed request
 */
 func setRedirectHandler (w http.ResponseWriter, r *http.Request) {
     r.ParseForm()
-    cookie := r.URL.Path.Get("cookie")
-    cookieName := r.URL.Path.Get("name")
-    if cookie == "" || cookieName == "" {
+    cookieTemp := r.FormValue("cookie")
+    cookieName := r.FormValue("name") // UUID (used as cookieMap's cookie name)
+
+    if cookieTemp == "" || cookieName == "" {
 	w.WriteHeader(400) // set response code to 400, request malformed
+	return
+    } else {
+        w.WriteHeader(200) // set response code to 200, request processed
     }
 
-
     // attempt to add cookie to internal cookie map
+    var newCookie http.Cookie
+    err1 := json.Unmarshal([]byte(cookieTemp), &newCookie)
+    if err1 != nil {
+        fmt.Println("Error unmarshalling new cookie")
+
+        if printToFile == 1 {
+	    defer Log.Flush()
+	    Log.Error("Error unmarshalling new cookie")
+	    return
+	}
+    }
+    
+    mutex.Lock()
+    cookieMap[cookieName] = newCookie
+    mutex.Unlock()
+}
 
 
-    w.WriteHeader(200) // set response code to 200, request processed
+/*
+Handler for cookie "clear" requests
+Attempts to clear a user cookie from cookieMap
+Returns response code 200 on processed request
+Returns response code 400 on malformed request
+*/
+func clearRedirectHandler (w http.ResponseWriter, r *http.Request) {
+    r.ParseForm()
+    cookieName := r.FormValue("cookie") // UUID (used as cookieMap's cookie name)
+    if cookieName == ""{
+	w.WriteHeader(400) // set response code to 400, request malformed
+	return
+    } else {
+        delete(cookieMap, cookieName) // delete cookie from map (if exists)
+        w.WriteHeader(200) // set response code to 200, request processed
+    }
 }
 
 
 /*
 
 */
-func errorHandler (w http.ResponseWriter, r *http.Request) {
+func errorhandler (w http.ResponseWriter, r *http.Request) {
     w.WriteHeader(404) // Set response code to 404 not found
 }
 
@@ -103,8 +139,18 @@ func Updatedumpfile() {
     for {
 	time.Sleep(stallDuration)
         mutex.Lock()
-        encodedMap,_ := json.Marshal(cookieMap)
+        encodedMap,encodeErr := json.Marshal(cookieMap)
         mutex.Unlock()
+
+        if encodeErr != nil {
+            fmt.Println("Error JSON encoding cookie map")
+
+            if printToFile == 1 {
+	        defer Log.Flush()
+	        Log.Error("Error JSON encoding cookie map/r/n")
+	        return
+	    }
+    	}
 
         oldDump,err := ioutil.ReadFile("dumpfile.txt")
         if err != nil { //Assume that dumpfile.txt hasn't been made yet
@@ -114,7 +160,7 @@ func Updatedumpfile() {
 	       fmt.Println("Error reading dumpfile")
                 if printToFile == 1 {
 		    defer Log.Flush()
-		    Log.Error("Error reading dumpfile")
+		    Log.Error("Error reading dumpfile/r/n")
 		    return
 	        }
             }
@@ -125,10 +171,9 @@ func Updatedumpfile() {
 	        fmt.Println("Error unmarshaling")
 	        if printToFile == 1 {
 	    	    defer Log.Flush()
-		    Log.Error("Error unmarshaling")
+		    Log.Error("Error unmarshaling/r/n")
 	        }
             }
-	    return
         }
 
         ioutil.WriteFile("dumpfile.bak", oldDump, 0644)
@@ -139,7 +184,7 @@ func Updatedumpfile() {
 	    fmt.Println("Error reading dumpfile")
             if printToFile == 1 {
 	        defer Log.Flush()
-	        Log.Error("Error reading dumpfile")
+	        Log.Error("Error reading dumpfile/r/n")
 	        return
 	    }
         }
@@ -151,7 +196,7 @@ func Updatedumpfile() {
 	    fmt.Println("Error unmarshaling")
 	    if printToFile == 1 {
                 defer Log.Flush()
-	        Log.Error("Error unmarshaling")
+	        Log.Error("Error unmarshaling/r/n")
 	    }
 	    return
         }
@@ -163,17 +208,21 @@ func Updatedumpfile() {
 Main
 */
 func main() {
+    fmt.Println("Now starting authentication server")
+
     p2f := flag.Bool("p2f", false, "") //flag to output to file
 
-    logPath := flag.String("log", "seelog.xml", "")
+    logPath := flag.String("log", "../../etc/seelog.xml", "")
 
-    authport = flag.Int("authport", 8181, "")
+    authport = flag.Int("authport", 9090, "")
 
     hostname = flag.String("hostname", "localhost:", "")
 
     loadDumpFile := flag.Bool("dumpfile", false, "")
 
     backupTime = flag.Int("checkpoint-interval", 0, "")
+
+    flag.Parse()
 
     printToFile = 0 // set to false
     if *p2f == true {
@@ -208,23 +257,24 @@ func main() {
     }
 
     //Setup the seelog logger (cudos to http://sillycat.iteye.com/blog/2070140, https://github.com/cihub/seelog/blob/master/doc.go#L57)
-    logger,loggerErr := Log.LoggerFromConfigAsFile("../../etc/" + *logPath)
+    logger,loggerErr := Log.LoggerFromConfigAsFile(*logPath)
     if loggerErr != nil {
     	fmt.Println("Error creating logger from .xml log configuration file")
     } else {
 	Log.ReplaceLogger(logger)
     }
 
-    http.HandleFunc("/get?cookie", getRedirectHandler)
-    http.HandleFunc("/set?cookie", setRedirectHandler)
-    http.HandleFunc("/", errorHandler)
+    http.HandleFunc("/", errorhandler)
+    http.HandleFunc("/get", getRedirectHandler)
+    http.HandleFunc("/set", setRedirectHandler)
+    http.HandleFunc("/clear", clearRedirectHandler)
 
     error := http.ListenAndServe(*hostname + strconv.Itoa(*authport), nil)
     if error != nil {				// If the specified port is already in use, 
 	fmt.Println("Port already in use")	// output a error message and exit with a 
         if printToFile == 1 {
-		defer Log.Flush()
-    		Log.Error("Port already in use\r\n")
+	    defer Log.Flush()
+    	    Log.Error("Port already in use\r\n")
         }
 	os.Exit(1)				// non-zero error code
     }
